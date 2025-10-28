@@ -1,6 +1,8 @@
 # Development Dockerfile for Go backend with hot reload
 
-FROM golang:1.24-alpine AS development
+# FROM golang:1.24-alpine AS development
+FROM golang:1.25-alpine AS development
+
 
 # Install git and air for hot reloading
 RUN apk add --no-cache git

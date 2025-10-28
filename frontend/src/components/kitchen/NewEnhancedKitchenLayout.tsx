@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,7 @@ import {
 import { cn } from '@/lib/utils';
 import apiClient from '@/api/client';
 import type { User as UserType, Order } from '@/types';
+import { OrderFilters } from './OrderFilters';
 
 interface NewEnhancedKitchenLayoutProps {
   user: UserType;
@@ -29,11 +30,13 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
   const [showSoundSettings, setShowSoundSettings] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [volume, setVolume] = useState(0.7);
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Fetch kitchen orders
   const { data: ordersResponse, isLoading, refetch, error } = useQuery({
-    queryKey: ['newEnhancedKitchenOrders'],
-    queryFn: () => apiClient.getKitchenOrders('all'),
+    queryKey: ['newEnhancedKitchenOrders', selectedStatus],
+    queryFn: () => apiClient.getKitchenOrders(selectedStatus === 'all' ? undefined : selectedStatus),
     refetchInterval: autoRefresh ? 3000 : false,
     select: (data) => data.data || [],
   });
@@ -43,11 +46,12 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
   // Filter orders to only show kitchen-relevant statuses
   // Orders disappear when served/completed by server staff
   const kitchenRelevantOrders = orders.filter((order: Order) => 
-    ['confirmed', 'preparing', 'ready'].includes(order.status)
+    ['pending', 'confirmed', 'preparing', 'ready'].includes(order.status)
   );
 
   // Group orders by status
   const ordersByStatus = {
+    pending: kitchenRelevantOrders.filter((order: Order) => order.status === 'pending'),
     confirmed: kitchenRelevantOrders.filter((order: Order) => order.status === 'confirmed'),
     preparing: kitchenRelevantOrders.filter((order: Order) => order.status === 'preparing'),
     ready: kitchenRelevantOrders.filter((order: Order) => order.status === 'ready'),
@@ -55,7 +59,8 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
 
   // Calculate statistics based on kitchen-relevant orders only
   const stats = {
-    total: kitchenRelevantOrders.length,
+    total: orders.length,
+    pending: ordersByStatus.pending.length,
     newOrders: ordersByStatus.confirmed.length,
     preparing: ordersByStatus.preparing.length,
     ready: ordersByStatus.ready.length,
@@ -66,6 +71,33 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
       return minutesWaiting > 15;
     }).length,
   };
+
+  // Build filtered list based on selected status and search query
+  const normalizedQuery = (searchQuery || '').trim().toLowerCase();
+  const baseList: Order[] =
+    selectedStatus === 'all'
+      ? kitchenRelevantOrders
+      : (ordersByStatus as Record<string, Order[]>)[selectedStatus] || [];
+
+  const filteredOrders = normalizedQuery
+    ? baseList.filter((order: Order) => {
+        const orderNumber = String(order.order_number ?? '').toLowerCase();
+        const customerName = String(order.customer_name ?? '').toLowerCase();
+        const tableNumber = String(order.table?.table_number ?? '').toLowerCase();
+        const itemsMatch = Array.isArray(order.items)
+          ? order.items.some((item: any) => {
+              const name = String(item?.product?.name ?? item?.name ?? '').toLowerCase();
+              return name.includes(normalizedQuery);
+            })
+          : false;
+        return (
+          orderNumber.includes(normalizedQuery) ||
+          customerName.includes(normalizedQuery) ||
+          tableNumber.includes(normalizedQuery) ||
+          itemsMatch
+        );
+      })
+    : baseList;
 
   // Handle logout
   const handleLogout = () => {
@@ -131,6 +163,57 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
   // Enhanced Order Card Component
   const EnhancedOrderCard = ({ order }: { order: Order }) => {
     const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+    const [items, setItems] = useState<any[]>(order.items || []);
+    const [loadingItems, setLoadingItems] = useState(false);
+    
+    // Utility: normalize order ID (decode base64-encoded UUIDs coming from kitchen list)
+    const normalizeOrderId = (id: any): string => {
+      try {
+        if (typeof id === 'string') {
+          // Try base64 decode and validate UUID
+          try {
+            const decoded = atob(id);
+            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decoded)) {
+              return decoded;
+            }
+          } catch (_) {
+            // not base64, just return original
+          }
+          return id;
+        }
+        // Fallback: stringify
+        return String(id);
+      } catch {
+        return String(id);
+      }
+    };
+    
+    // Load full order details to ensure items are present
+    useEffect(() => {
+      let isMounted = true;
+      const loadItems = async () => {
+        try {
+          setLoadingItems(true);
+          const orderId = normalizeOrderId(order.id);
+          const res = await apiClient.getOrder(orderId);
+          console.debug('Kitchen card: fetched order detail', res);
+          const fetched = (res as any)?.data?.items ?? (res as any)?.items ?? [];
+          if (isMounted) {
+            setItems(Array.isArray(fetched) ? fetched : []);
+          }
+        } catch (err) {
+          console.warn('Failed to fetch full order details:', err);
+          // Fallback to any items present on the order object
+          if (isMounted) {
+            setItems(order.items || []);
+          }
+        } finally {
+          setLoadingItems(false);
+        }
+      };
+      loadItems();
+      return () => { isMounted = false; };
+    }, [order.id]);
     
     const toggleItem = (itemId: string) => {
       const newChecked = new Set(checkedItems);
@@ -141,14 +224,15 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
       }
       setCheckedItems(newChecked);
       
-      // Update item status
+      // Update item status using real item id
       const newStatus = newChecked.has(itemId) ? 'ready' : 'preparing';
-      handleItemStatusUpdate(order.id, itemId, newStatus);
+      const orderId = normalizeOrderId(order.id);
+      handleItemStatusUpdate(orderId, itemId, newStatus);
       
       // Auto-complete order if all items are checked
-      if (order.items && newChecked.size === order.items.length) {
+      if (items && newChecked.size === items.length) {
         setTimeout(() => {
-          handleOrderStatusUpdate(order.id, 'ready');
+          handleOrderStatusUpdate(orderId, 'ready');
         }, 500);
       }
     };
@@ -165,48 +249,8 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
 
     const waitTime = Math.floor((new Date().getTime() - new Date(order.created_at).getTime()) / 1000 / 60);
 
-    // Mock items if none exist (for demo purposes)
-    const displayItems = order.items && order.items.length > 0 ? order.items : [
-      {
-        id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-        order_id: order.id,
-        product_id: 'p1b2c3d4-e5f6-7890-abcd-ef1234567890',
-        quantity: 2,
-        unit_price: 12.99,
-        total_price: 25.98,
-        special_instructions: 'No onions',
-        status: 'preparing' as const,
-        created_at: order.created_at,
-        updated_at: order.updated_at,
-        product: { id: 'p1b2c3d4-e5f6-7890-abcd-ef1234567890', name: 'Cheeseburger', price: 12.99, description: 'Beef patty with cheese', category_id: 'c1b2c3d4-e5f6-7890-abcd-ef1234567890', is_available: true, created_at: '', updated_at: '' }
-      },
-      {
-        id: 'b2c3d4e5-f6g7-8901-bcde-f23456789012',
-        order_id: order.id,
-        product_id: 'p2c3d4e5-f6g7-8901-bcde-f23456789012',
-        quantity: 1,
-        unit_price: 4.99,
-        total_price: 4.99,
-        special_instructions: 'Extra crispy',
-        status: 'preparing' as const,
-        created_at: order.created_at,
-        updated_at: order.updated_at,
-        product: { id: 'p2c3d4e5-f6g7-8901-bcde-f23456789012', name: 'French Fries', price: 4.99, description: 'Crispy golden fries', category_id: 'c2c3d4e5-f6g7-8901-bcde-f23456789012', is_available: true, created_at: '', updated_at: '' }
-      },
-      {
-        id: 'c3d4e5f6-g7h8-9012-cdef-345678901234',
-        order_id: order.id,
-        product_id: 'p3d4e5f6-g7h8-9012-cdef-345678901234',
-        quantity: 1,
-        unit_price: 2.99,
-        total_price: 2.99,
-        special_instructions: null,
-        status: 'preparing' as const,
-        created_at: order.created_at,
-        updated_at: order.updated_at,
-        product: { id: 'p3d4e5f6-g7h8-9012-cdef-345678901234', name: 'Coca Cola', price: 2.99, description: 'Refreshing cola drink', category_id: 'c3d4e5f6-g7h8-9012-cdef-345678901234', is_available: true, created_at: '', updated_at: '' }
-      }
-    ];
+    // Use real items if available; avoid mock items
+    const displayItems = items && items.length > 0 ? items : [];
 
     // Calculate progress including served items
     const totalItems = displayItems.length;
@@ -264,6 +308,9 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
               Food Items:
             </h4>
             
+            {displayItems.length === 0 && (
+              <div className="text-sm text-muted-foreground">No items loaded for this order.</div>
+            )}
             {displayItems.map((item, index) => {
               const isServed = item.status === 'served';
               const isReady = checkedItems.has(item.id);
@@ -323,7 +370,8 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
                         className="h-6 px-2 text-xs bg-blue-50 hover:bg-blue-100 border-blue-300"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleItemServe(order.id, item.id, item.product?.name || 'Item');
+                          const orderId = normalizeOrderId(order.id);
+                          handleItemServe(orderId, item.id, item.product?.name || 'Item');
                         }}
                       >
                         🍽️ Serve Now
@@ -668,6 +716,23 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
 
       {/* Main Content */}
       <div className="p-6">
+        {/* Filters */}
+        <div className="bg-white border-b border-gray-200 p-4 mb-4 rounded-md">
+          <OrderFilters
+            selectedStatus={selectedStatus}
+            onStatusChange={setSelectedStatus}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            orderCounts={{
+              all: kitchenRelevantOrders.length,
+              pending: ordersByStatus.pending.length,
+              confirmed: ordersByStatus.confirmed.length,
+              preparing: ordersByStatus.preparing.length,
+              ready: ordersByStatus.ready.length,
+            }}
+          />
+        </div>
+
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-6">
             <TabsTrigger value="active-orders" className="text-lg py-3">
@@ -693,22 +758,18 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
                 <div className="text-center">
                   <AlertCircle className="w-8 h-8 mx-auto mb-4 text-red-600" />
                   <p className="text-red-600">Failed to load orders</p>
-                  <Button onClick={() => refetch()} className="mt-2">
-                    Try Again
-                  </Button>
+                  <Button onClick={() => refetch()} className="mt-2">Try Again</Button>
                 </div>
               </div>
-            ) : kitchenRelevantOrders.length === 0 ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="text-center">
-                  <ChefHat className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Orders</h3>
-                  <p className="text-gray-500">Kitchen is all caught up! 🎉</p>
-                </div>
+            ) : selectedStatus === 'all' ? (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {kitchenRelevantOrders.map((order) => (
+                  <EnhancedOrderCard key={order.id} order={order} />
+                ))}
               </div>
             ) : (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {kitchenRelevantOrders.map((order) => (
+                {filteredOrders.map((order) => (
                   <EnhancedOrderCard key={order.id} order={order} />
                 ))}
               </div>

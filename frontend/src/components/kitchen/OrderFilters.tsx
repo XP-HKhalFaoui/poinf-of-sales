@@ -8,6 +8,7 @@ interface OrderFiltersProps {
   onSearchChange: (query: string) => void
   orderCounts: {
     all: number
+    pending: number
     confirmed: number
     preparing: number
     ready: number
@@ -23,6 +24,7 @@ export function OrderFilters({
 }: OrderFiltersProps) {
   const filterButtons = [
     { key: 'all', label: 'All Orders', count: orderCounts.all, color: 'bg-gray-500' },
+    { key: 'pending', label: 'Pending', count: orderCounts.pending, color: 'bg-gray-500' },
     { key: 'confirmed', label: 'New', count: orderCounts.confirmed, color: 'bg-yellow-500' },
     { key: 'preparing', label: 'Preparing', count: orderCounts.preparing, color: 'bg-blue-500' },
     { key: 'ready', label: 'Ready', count: orderCounts.ready, color: 'bg-green-500' },
@@ -49,6 +51,7 @@ export function OrderFilters({
                   ? 'bg-white/20 text-white' 
                   : 'bg-gray-100 text-gray-700'
                 }
+              
               `}>
                 {filter.count}
               </span>

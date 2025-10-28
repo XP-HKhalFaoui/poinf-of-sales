@@ -17,6 +17,7 @@ vendor/
 dist/
 build/
 tmp/
+.vite/
 
 # Log files
 *.log
@@ -89,3 +90,11 @@ files/
 # Temporary files
 *.tmp
 *.temp
+
+# TypeScript and linters
+*.tsbuildinfo
+.eslintcache
+
+# Testing tools
+cypress/
+*.snap

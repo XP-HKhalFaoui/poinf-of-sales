@@ -38,9 +38,10 @@ export function KitchenLayout({ user }: KitchenLayoutProps) {
 
   // Group orders by status for better organization
   const ordersByStatus = {
+    pending: filteredOrders.filter((order: Order) => order.status === 'pending'),
     confirmed: filteredOrders.filter((order: Order) => order.status === 'confirmed'),
     preparing: filteredOrders.filter((order: Order) => order.status === 'preparing'),
-    ready: filteredOrders.filter((order: Order) => order.status === 'ready')
+    ready: filteredOrders.filter((order: Order) => order.status === 'ready'),
   }
 
   // Handle order status update
@@ -90,6 +91,7 @@ export function KitchenLayout({ user }: KitchenLayoutProps) {
           onSearchChange={setSearchQuery}
           orderCounts={{
             all: orders.length,
+            pending: ordersByStatus.pending.length,
             confirmed: ordersByStatus.confirmed.length,
             preparing: ordersByStatus.preparing.length,
             ready: ordersByStatus.ready.length
@@ -123,6 +125,26 @@ export function KitchenLayout({ user }: KitchenLayoutProps) {
         ) : selectedStatus === 'all' ? (
           // Show orders grouped by status
           <div className="p-6 space-y-8">
+            {/* Pending Orders */}
+            {ordersByStatus.pending.length > 0 && (
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                  <div className="w-3 h-3 bg-gray-500 rounded-full mr-3"></div>
+                  Pending Orders ({ordersByStatus.pending.length})
+                </h2>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {ordersByStatus.pending.map((order: Order) => (
+                    <KitchenOrderCard
+                      key={order.id}
+                      order={order}
+                      onStatusUpdate={handleOrderStatusUpdate}
+                      onItemStatusUpdate={handleOrderItemStatusUpdate}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Confirmed Orders */}
             {ordersByStatus.confirmed.length > 0 && (
               <div>

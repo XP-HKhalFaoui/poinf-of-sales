@@ -21,13 +21,22 @@ func main() {
 	}
 
 	// Database configuration
+	// dbConfig := database.Config{
+	// 	Host:     getEnv("DB_HOST", "localhost"),
+	// 	Port:     getEnv("DB_PORT", "5432"),
+	// 	User:     getEnv("DB_USER", "postgres"),
+	// 	Password: getEnv("DB_PASSWORD", "123457"),
+	// 	DBName:   getEnv("DB_NAME", "pos_system"),
+	// 	SSLMode:  getEnv("DB_SSLMODE", "disable"),
+	// }
+
 	dbConfig := database.Config{
-		Host:     getEnv("DB_HOST", "postgres"),
-		Port:     getEnv("DB_PORT", "5432"),
-		User:     getEnv("DB_USER", "postgres"),
-		Password: getEnv("DB_PASSWORD", "postgres123"),
-		DBName:   getEnv("DB_NAME", "pos_system"),
-		SSLMode:  getEnv("DB_SSLMODE", "disable"),
+		Host:     "localhost",
+		Port:     "5432",
+		User:     "postgres",
+		Password: "postgres123",
+		DBName:   "pos_system",
+		SSLMode:  "disable",
 	}
 
 	// Initialize database connection
