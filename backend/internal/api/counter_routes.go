@@ -13,7 +13,7 @@ import (
 func SetupCounterRoutes(router *gin.RouterGroup, db *sql.DB, authMiddleware gin.HandlerFunc) {
 	counter := router.Group("/counter")
 	counter.Use(authMiddleware)
-	counter.Use(middleware.RequireRole("counter"))
+	counter.Use(middleware.RequireRoles([]string{"admin", "counter"}))
 	{
 		orderHandler := handlers.NewOrderHandler(db)
 		paymentHandler := handlers.NewPaymentHandler(db)
