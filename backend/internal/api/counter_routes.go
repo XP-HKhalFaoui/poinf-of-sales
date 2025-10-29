@@ -5,6 +5,7 @@ import (
 
 	"pos-backend/internal/handlers"
 	"pos-backend/internal/middleware"
+	"pos-backend/internal/repository"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,7 +16,8 @@ func SetupCounterRoutes(router *gin.RouterGroup, db *sql.DB, authMiddleware gin.
 	counter.Use(authMiddleware)
 	counter.Use(middleware.RequireRoles([]string{"admin", "counter"}))
 	{
-		orderHandler := handlers.NewOrderHandler(db)
+		orderRepo := repository.NewPostgresOrderRepository(db)
+		orderHandler := handlers.NewOrderHandler(orderRepo)
 		paymentHandler := handlers.NewPaymentHandler(db)
 
 		counter.POST("/orders", orderHandler.CreateOrder)
