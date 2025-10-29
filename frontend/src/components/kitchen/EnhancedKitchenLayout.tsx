@@ -46,41 +46,47 @@ export function EnhancedKitchenLayout({ user }: EnhancedKitchenLayoutProps) {
   }, []);
 
   // Fetch kitchen orders with smart polling
-  const { data: ordersResponse, isLoading, refetch, error } = useQuery({
+  const { data: ordersResponse, isLoading, refetch, error } = useQuery<Order[], Error>({
     queryKey: ['enhancedKitchenOrders'],
-    queryFn: () => apiClient.getKitchenOrders('all'),
-    refetchInterval: autoRefresh ? 3000 : false, // 3-second refresh for balance
-    select: (data) => data.data || [],
-    onSuccess: (data) => {
-      setLastRefresh(new Date());
-      
-      // Check for new orders and play sound
-      const currentOrders = data || [];
-      const currentOrderIds = new Set(currentOrders.map((order: Order) => order.id));
-      const newOrderIds = currentOrders
-        .filter((order: Order) => !previousOrderIds.has(order.id) && order.status === 'confirmed')
-        .map((order: Order) => order.id);
-      
-      // Play sound for new orders
-      newOrderIds.forEach(async (orderId) => {
-        try {
-          await kitchenSoundService.playNewOrderSound(orderId);
-        } catch (error) {
-          console.error('Failed to play new order sound:', error);
-        }
-      });
-      
-      setPreviousOrderIds(currentOrderIds);
+    queryFn: async () => {
+      const response = await apiClient.getKitchenOrders('all');
+      return response.data || [];
     },
+    refetchInterval: autoRefresh ? 3000 : false, // 3-second refresh for balance
   });
 
-  const orders = ordersResponse || [];
+  // Handle new orders and play sound
+  useEffect(() => {
+    if (ordersResponse) {
+      setLastRefresh(new Date());
+      
+      const currentOrders = ordersResponse;
+      const currentOrderIds = new Set<string>(currentOrders.map(order => order.id));
+      const newOrders = currentOrders.filter(order => 
+        !previousOrderIds.has(order.id) && order.status === 'confirmed'
+      );
+      
+      // Play sound for new orders (if sound is enabled)
+      if (newOrders.length > 0) {
+        const settings = kitchenSoundService.getSettings();
+        if (settings.enabled && settings.newOrderEnabled) {
+          kitchenSoundService.playNewOrderSound(newOrders[0].id).catch(error => {
+            console.error('Failed to play new order sound:', error);
+          });
+        }
+      }
+      
+      setPreviousOrderIds(currentOrderIds);
+    }
+  }, [ordersResponse, previousOrderIds]);
+
+  const orders: Order[] = ordersResponse || [];
 
   // Group orders by status for better organization
   const ordersByStatus = {
-    confirmed: orders.filter((order: Order) => order.status === 'confirmed'),
-    preparing: orders.filter((order: Order) => order.status === 'preparing'),
-    ready: orders.filter((order: Order) => order.status === 'ready'),
+    confirmed: orders.filter(order => order.status === 'confirmed'),
+    preparing: orders.filter(order => order.status === 'preparing'),
+    ready: orders.filter(order => order.status === 'ready'),
   };
 
   // Calculate statistics
