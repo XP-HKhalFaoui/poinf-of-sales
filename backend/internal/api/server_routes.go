@@ -8,6 +8,7 @@ import (
 
 	"pos-backend/internal/handlers"
 	"pos-backend/internal/middleware"
+	"pos-backend/internal/repository"
 
 	"github.com/gin-gonic/gin"
 )
@@ -46,7 +47,8 @@ func createDineInOrder(db *sql.DB) gin.HandlerFunc {
 		}
 
 		// Force order type to dine_in for servers
-		orderHandler := handlers.NewOrderHandler(db)
+		orderRepo := repository.NewPostgresOrderRepository(db)
+		orderHandler := handlers.NewOrderHandler(orderRepo)
 
 		// Create order request with forced dine_in type
 		createOrderReq := map[string]interface{}{
