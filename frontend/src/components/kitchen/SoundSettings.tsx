@@ -65,6 +65,12 @@ export function SoundSettings({ className, onClose }: SoundSettingsProps) {
       description: 'Plays when a takeaway order is ready',
       icon: '📦',
     },
+    {
+      type: 'server_notification' as const,
+      label: 'Server Notification',
+      description: 'Plays to notify kitchen servers after order creation',
+      icon: '👨‍🍳',
+    },
   ];
 
   return (
@@ -150,6 +156,20 @@ export function SoundSettings({ className, onClose }: SoundSettingsProps) {
               <Switch
                 checked={settings.takeawayReadyEnabled && settings.enabled}
                 onCheckedChange={(checked) => handleSettingChange('takeawayReadyEnabled', checked)}
+                disabled={!settings.enabled}
+              />
+            </div>
+
+            <div className="flex items-center justify-between space-x-2">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">Server Notifications</Label>
+                <p className="text-xs text-muted-foreground">
+                  Alert kitchen servers after order creation
+                </p>
+              </div>
+              <Switch
+                checked={settings.serverNotificationEnabled && settings.enabled}
+                onCheckedChange={(checked) => handleSettingChange('serverNotificationEnabled', checked)}
                 disabled={!settings.enabled}
               />
             </div>
