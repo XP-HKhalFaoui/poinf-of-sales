@@ -21,23 +21,23 @@ func main() {
 	}
 
 	// Database configuration
-	// dbConfig := database.Config{
-	// 	Host:     getEnv("DB_HOST", "localhost"),
-	// 	Port:     getEnv("DB_PORT", "5432"),
-	// 	User:     getEnv("DB_USER", "postgres"),
-	// 	Password: getEnv("DB_PASSWORD", "123457"),
-	// 	DBName:   getEnv("DB_NAME", "pos_system"),
-	// 	SSLMode:  getEnv("DB_SSLMODE", "disable"),
-	// }
-
 	dbConfig := database.Config{
-		Host:     "localhost",
-		Port:     "5432",
-		User:     "postgres",
-		Password: "postgres123",
-		DBName:   "pos_system",
-		SSLMode:  "disable",
+		Host:     getEnv("DB_HOST", "localhost"),
+		Port:     getEnv("DB_PORT", "5432"),
+		User:     getEnv("DB_USER", "postgres"),
+		Password: getEnv("DB_PASSWORD", "postgres123"),
+		DBName:   getEnv("DB_NAME", "pos_system"),
+		SSLMode:  getEnv("DB_SSLMODE", "disable"),
 	}
+
+	// dbConfig := database.Config{
+	// 	Host:     "localhost",
+	// 	Port:     "5432",
+	// 	User:     "postgres",
+	// 	Password: "postgres123",
+	// 	DBName:   "pos_system",
+	// 	SSLMode:  "disable",
+	// }
 
 	// Initialize database connection
 	db, err := database.Connect(dbConfig)
@@ -61,7 +61,7 @@ func main() {
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003", "http://localhost:5173"},
+		AllowOrigins:     []string{"http://192.168.1.89:3000", "http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003", "http://localhost:5173"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Content-Length", "Accept-Encoding", "X-CSRF-Token", "Authorization", "accept", "origin", "Cache-Control", "X-Requested-With"},
 		AllowCredentials: true,
