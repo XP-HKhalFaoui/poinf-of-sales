@@ -5,6 +5,7 @@ import (
 
 	"pos-backend/internal/handlers"
 	"pos-backend/internal/middleware"
+	"pos-backend/internal/repository"
 
 	"github.com/gin-gonic/gin"
 )
@@ -41,7 +42,8 @@ func SetupAdminRoutes(router *gin.RouterGroup, db *sql.DB, authMiddleware gin.Ha
 		admin.DELETE("/users/:id", deleteUser(db))
 
 		// Advanced order management
-		orderHandler := handlers.NewOrderHandler(db)
+		orderRepo := repository.NewPostgresOrderRepository(db)
+		orderHandler := handlers.NewOrderHandler(orderRepo)
 		paymentHandler := handlers.NewPaymentHandler(db)
 		admin.POST("/orders", orderHandler.CreateOrder)                   // Admins can create any type of order
 		admin.POST("/orders/:id/payments", paymentHandler.ProcessPayment) // Admins can process payments
