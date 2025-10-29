@@ -17,13 +17,11 @@ export function KitchenLayout({ user }: KitchenLayoutProps) {
   const [autoRefresh, setAutoRefresh] = useState(true)
 
   // Fetch kitchen orders with real-time updates
-  const { data: ordersResponse, isLoading, refetch } = useQuery({
-    queryKey: ['kitchenOrders', selectedStatus],
-    queryFn: () => apiClient.getKitchenOrders(selectedStatus === 'all' ? undefined : selectedStatus),
-    refetchInterval: autoRefresh ? 5000 : false, // Auto-refresh every 5 seconds
-  })
-
-  const orders = ordersResponse?.data || []
+  // Orders should be passed as props from EnhancedKitchenLayout
+  // const orders = props.orders || []
+  const orders: Order[] = [];
+  const isLoading = false;
+  const refetch = () => {};
 
   // Filter orders by search query
   const filteredOrders = orders.filter((order: Order) => {
