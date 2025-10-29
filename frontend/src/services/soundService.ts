@@ -9,10 +9,11 @@ export interface SoundSettings {
   newOrderEnabled: boolean;
   orderReadyEnabled: boolean;
   takeawayReadyEnabled: boolean;
+  serverNotificationEnabled: boolean;
 }
 
 export interface SoundEvent {
-  type: 'new_order' | 'order_ready' | 'takeaway_ready';
+  type: 'new_order' | 'order_ready' | 'takeaway_ready' | 'server_notification';
   orderId: string;
   metadata?: Record<string, any>;
 }
@@ -25,6 +26,7 @@ class KitchenSoundService {
     newOrderEnabled: true,
     orderReadyEnabled: true,
     takeawayReadyEnabled: true,
+    serverNotificationEnabled: true,
   };
   
   private soundCache = new Map<string, AudioBuffer>();
@@ -79,6 +81,7 @@ class KitchenSoundService {
       new_order: '/sounds/kitchen/new-order.mp3',
       order_ready: '/sounds/kitchen/order-ready.mp3',
       takeaway_ready: '/sounds/kitchen/takeaway-ready.mp3',
+      server_notification: '/sounds/kitchen/server-notification.mp3',
     };
 
     const loadPromises = Object.entries(sounds).map(async ([key, url]) => {
@@ -121,6 +124,7 @@ class KitchenSoundService {
       new_order: [800, 1000], // Pleasant chime
       order_ready: [600, 800, 1000], // Success sound
       takeaway_ready: [400, 600, 400], // Distinctive pattern
+      server_notification: [500, 700, 900], // Server alert tone
     };
 
     const freqs = frequencies[type as keyof typeof frequencies] || [440];
@@ -154,6 +158,7 @@ class KitchenSoundService {
       new_order: this.settings.newOrderEnabled,
       order_ready: this.settings.orderReadyEnabled,
       takeaway_ready: this.settings.takeawayReadyEnabled,
+      server_notification: this.settings.serverNotificationEnabled,
     };
 
     if (!soundTypeEnabled[event.type]) {
@@ -217,6 +222,17 @@ class KitchenSoundService {
       type: soundType,
       orderId,
       metadata: { orderType, timestamp: Date.now() }
+    });
+  }
+
+  /**
+   * Play server notification sound
+   */
+  async playServerNotificationSound(orderId: string): Promise<void> {
+    await this.playSound({
+      type: 'server_notification',
+      orderId,
+      metadata: { timestamp: Date.now() }
     });
   }
 
