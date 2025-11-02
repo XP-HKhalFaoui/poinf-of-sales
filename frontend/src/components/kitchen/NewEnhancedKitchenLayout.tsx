@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,47 +12,49 @@ import {
   ChefHat,
   Package,
   CheckCircle,
-  // AlertCircle,
+  AlertCircle,
   LogOut
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import apiClient from '@/api/client';
 import type { User as UserType, Order } from '@/types';
-import { kitchenSoundService } from '@/services/soundService';
 import { OrderFilters } from './OrderFilters';
-import { SoundSettings } from './SoundSettings';
 
 interface NewEnhancedKitchenLayoutProps {
   user: UserType;
 }
 
 export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps) {
-  const isSoundEnabled = () => kitchenSoundService.getSettings().enabled;
   const [selectedTab, setSelectedTab] = useState('active-orders');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [showSoundSettings, setShowSoundSettings] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [volume, setVolume] = useState(0.7);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Fetch kitchen orders
-    // Orders should be passed as props from EnhancedKitchenLayout
-    // const orders = props.orders || []
-  const orders: Order[] = [];
-  const isLoading: boolean = false;
-    const refetch = () => {};
+  const { data: ordersResponse, isLoading, refetch, error } = useQuery({
+    queryKey: ['newEnhancedKitchenOrders', selectedStatus],
+    queryFn: () => apiClient.getKitchenOrders(selectedStatus === 'all' ? undefined : selectedStatus),
+    refetchInterval: autoRefresh ? 3000 : false,
+    select: (data) => data.data || [],
+  });
+
+  const orders = ordersResponse || [];
 
   // Filter orders to only show kitchen-relevant statuses
   // Orders disappear when served/completed by server staff
-  const kitchenRelevantOrders = orders.filter((order) => 
+  const kitchenRelevantOrders = orders.filter((order: Order) => 
     ['pending', 'confirmed', 'preparing', 'ready'].includes(order.status)
   );
 
   // Group orders by status
-  const ordersByStatus: Record<string, Order[]> = {
-    pending: kitchenRelevantOrders.filter((order) => order.status === 'pending'),
-    confirmed: kitchenRelevantOrders.filter((order) => order.status === 'confirmed'),
-    preparing: kitchenRelevantOrders.filter((order) => order.status === 'preparing'),
-    ready: kitchenRelevantOrders.filter((order) => order.status === 'ready'),
+  const ordersByStatus = {
+    pending: kitchenRelevantOrders.filter((order: Order) => order.status === 'pending'),
+    confirmed: kitchenRelevantOrders.filter((order: Order) => order.status === 'confirmed'),
+    preparing: kitchenRelevantOrders.filter((order: Order) => order.status === 'preparing'),
+    ready: kitchenRelevantOrders.filter((order: Order) => order.status === 'ready'),
   };
 
   // Calculate statistics based on kitchen-relevant orders only
@@ -78,7 +80,7 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
       : (ordersByStatus as Record<string, Order[]>)[selectedStatus] || [];
 
   const filteredOrders = normalizedQuery
-    ? baseList.filter((order) => {
+    ? baseList.filter((order: Order) => {
         const orderNumber = String(order.order_number ?? '').toLowerCase();
         const customerName = String(order.customer_name ?? '').toLowerCase();
         const tableNumber = String(order.table?.table_number ?? '').toLowerCase();
@@ -130,10 +132,24 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
       await apiClient.updateOrderItemStatus(orderId, itemId, 'served');
       
       // Play notification sound
-      try {
-        await kitchenSoundService.playOrderReadySound(orderId, 'dine-in');
-      } catch (error) {
-        console.log('Sound notification failed:', error);
+      if (soundEnabled) {
+        try {
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          
+          // Different tone for individual item served (higher pitch)
+          oscillator.frequency.setValueAtTime(1400, audioContext.currentTime);
+          gainNode.gain.setValueAtTime(volume * 0.2, audioContext.currentTime);
+          
+          oscillator.start();
+          oscillator.stop(audioContext.currentTime + 0.2);
+        } catch (error) {
+          console.log('Sound notification failed:', error);
+        }
       }
       
       // Show success message
@@ -148,7 +164,7 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
   const EnhancedOrderCard = ({ order }: { order: Order }) => {
     const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
     const [items, setItems] = useState<any[]>(order.items || []);
-  // Removed unused loadingItems state
+    const [loadingItems, setLoadingItems] = useState(false);
     
     // Utility: normalize order ID (decode base64-encoded UUIDs coming from kitchen list)
     const normalizeOrderId = (id: any): string => {
@@ -177,7 +193,7 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
       let isMounted = true;
       const loadItems = async () => {
         try {
-          // setLoadingItems(true); // removed unused state
+          setLoadingItems(true);
           const orderId = normalizeOrderId(order.id);
           const res = await apiClient.getOrder(orderId);
           console.debug('Kitchen card: fetched order detail', res);
@@ -192,7 +208,7 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
             setItems(order.items || []);
           }
         } finally {
-          // setLoadingItems(false); // removed unused state
+          setLoadingItems(false);
         }
       };
       loadItems();
@@ -402,14 +418,27 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
                   });
                   
                   // Mark order as ready
-                  setTimeout(async () => {
+                  setTimeout(() => {
                     handleOrderStatusUpdate(order.id, 'ready');
                     
                     // Play ready notification sound
-                    try {
-                      await kitchenSoundService.playOrderReadySound(order.id, 'dine-in');
-                    } catch (error) {
-                      console.log('Sound notification failed:', error);
+                    if (soundEnabled) {
+                      try {
+                        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+                        const oscillator = audioContext.createOscillator();
+                        const gainNode = audioContext.createGain();
+                        
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioContext.destination);
+                        
+                        oscillator.frequency.setValueAtTime(1200, audioContext.currentTime);
+                        gainNode.gain.setValueAtTime(volume * 0.3, audioContext.currentTime);
+                        
+                        oscillator.start();
+                        oscillator.stop(audioContext.currentTime + 0.3);
+                      } catch (error) {
+                        console.log('Sound notification failed:', error);
+                      }
                     }
                   }, 500);
                 }}
@@ -474,7 +503,7 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
                   Ready for {waitTime} minutes
                 </div>
                 <div className="mt-2">
-                  {order.items?.map((item: any) => (
+                  {order.items?.map((item) => (
                     <div key={item.id} className="text-sm">
                       {item.quantity}x {item.product?.name}
                     </div>
@@ -488,9 +517,95 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
     );
   };
 
-  // Sound Settings Panel using the proper SoundSettings component
+  // Sound Settings Panel
   const SoundSettingsPanel = () => (
-    <SoundSettings onClose={() => setShowSoundSettings(false)} />
+    <Card className="w-80">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Volume2 className="w-5 h-5" />
+          Sound Settings
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium">Enable Sounds</label>
+          <button
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className={cn(
+              "w-12 h-6 rounded-full transition-colors",
+              soundEnabled ? "bg-blue-600" : "bg-gray-300"
+            )}
+          >
+            <div className={cn(
+              "w-5 h-5 rounded-full bg-white transition-transform",
+              soundEnabled ? "translate-x-6" : "translate-x-1"
+            )} />
+          </button>
+        </div>
+        
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Volume</label>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.1"
+            value={volume}
+            onChange={(e) => setVolume(parseFloat(e.target.value))}
+            className="w-full"
+          />
+        </div>
+        
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="flex-1"
+            onClick={() => {
+              // Play a simple beep sound for new order
+              const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const oscillator = audioContext.createOscillator();
+              const gainNode = audioContext.createGain();
+              
+              oscillator.connect(gainNode);
+              gainNode.connect(audioContext.destination);
+              
+              oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+              gainNode.gain.setValueAtTime(volume * 0.3, audioContext.currentTime);
+              gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+              
+              oscillator.start(audioContext.currentTime);
+              oscillator.stop(audioContext.currentTime + 0.5);
+            }}
+          >
+            Test New Order
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="flex-1"
+            onClick={() => {
+              // Play a different beep sound for ready order
+              const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const oscillator = audioContext.createOscillator();
+              const gainNode = audioContext.createGain();
+              
+              oscillator.connect(gainNode);
+              gainNode.connect(audioContext.destination);
+              
+              oscillator.frequency.setValueAtTime(1200, audioContext.currentTime);
+              gainNode.gain.setValueAtTime(volume * 0.3, audioContext.currentTime);
+              gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+              
+              oscillator.start(audioContext.currentTime);
+              oscillator.stop(audioContext.currentTime + 0.3);
+            }}
+          >
+            Test Ready
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 
   return (
@@ -567,7 +682,7 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
               size="sm"
               onClick={() => setShowSoundSettings(!showSoundSettings)}
             >
-              {isSoundEnabled() ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </Button>
 
             <Button
@@ -638,7 +753,14 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
                   <p className="text-gray-500">Loading kitchen orders...</p>
                 </div>
               </div>
-            ) : null }
+            ) : error ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="text-center">
+                  <AlertCircle className="w-8 h-8 mx-auto mb-4 text-red-600" />
+                  <p className="text-red-600">Failed to load orders</p>
+                  <Button onClick={() => refetch()} className="mt-2">Try Again</Button>
+                </div>
+              </div>
             ) : selectedStatus === 'all' ? (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {kitchenRelevantOrders.map((order) => (
@@ -651,7 +773,7 @@ export function NewEnhancedKitchenLayout({ user }: NewEnhancedKitchenLayoutProps
                   <EnhancedOrderCard key={order.id} order={order} />
                 ))}
               </div>
-            )
+            )}
           </TabsContent>
 
           <TabsContent value="takeaway-ready">
