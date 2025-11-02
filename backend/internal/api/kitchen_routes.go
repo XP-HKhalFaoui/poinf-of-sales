@@ -24,7 +24,7 @@ func getKitchenOrders(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		status := c.DefaultQuery("status", "all")
 
-	query := `
+		query := `
 			SELECT DISTINCT o.id::text, o.order_number, o.table_id::text, o.order_type, o.status, 
 		       o.created_at, o.customer_name,
 		       t.table_number
@@ -32,6 +32,7 @@ func getKitchenOrders(db *sql.DB) gin.HandlerFunc {
 			LEFT JOIN dining_tables t ON o.table_id = t.id
 			WHERE o.status IN ('pending', 'confirmed', 'preparing', 'ready') AND o.created_at::date = CURRENT_DATE
 		`
+		// WHERE o.status IN ('pending', 'confirmed', 'preparing', 'ready') AND o.created_at::date = CURRENT_DATE
 
 		if status != "all" {
 			query += ` AND o.status = '` + status + `'`
